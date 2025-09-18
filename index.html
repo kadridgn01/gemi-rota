@@ -15,9 +15,7 @@
   .dot{background:#fff;border:3px solid #2a6aff;border-radius:50%;width:14px;height:14px}
   .label{background:rgba(0,0,0,.6);color:#fff;padding:2px 6px;border-radius:6px;font:12px/1.2 system-ui}
   .legend{position:absolute;left:12px;bottom:12px;background:#111;color:#fff;padding:10px 12px;border-radius:10px;opacity:.95;z-index:999}
-  /* küçük estetik: hafif vignette */
-  #map::after { content:""; position: absolute; inset:0; pointer-events:none;
-    box-shadow: inset 0 0 120px rgba(0,0,0,0.12);}
+  #map::after { content:""; position: absolute; inset:0; pointer-events:none; box-shadow: inset 0 0 120px rgba(0,0,0,0.12);}
 </style>
 </head>
 <body>
@@ -28,7 +26,7 @@
 <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
 <script>
-// ===== WAYPOINT'LER (okunması kolay olsun diye lat/lon şeklinde) =====
+// WAYPOINTS
 const waypoints = [
   {name:"İstanbul", lat:41.01, lon:28.97},
   {name:"Çanakkale (Dardanel)", lat:40.15, lon:26.41},
@@ -39,37 +37,29 @@ const waypoints = [
   {name:"Buenos Aires", lat:-34.60, lon:-58.38}
 ];
 
-// ===== HARİTA (Leaflet) =====
+// MAP
 const map = L.map('map',{zoomControl:true}).setView([10,-30],3);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap'
 }).addTo(map);
 
-// markers + tooltip
+// MARKERS
 waypoints.forEach(p=>{
-  L.marker([p.lat,p.lon],{
-    icon: L.divIcon({className:'dot',iconSize:[14,14]})
-  }).addTo(map).bindTooltip(p.name,{permanent:true,direction:'top',offset:[0,-10],className:'label'});
+  L.marker([p.lat,p.lon],{icon: L.divIcon({className:'dot',iconSize:[14,14]})})
+    .addTo(map).bindTooltip(p.name,{permanent:true,direction:'top',offset:[0,-10],className:'label'});
 });
 
-// ===== Gerçekçi rota: waypoint'ler arası great-circle segmentleri =====
+// BUILD GREAT-CIRCLE ROUTE
 let fullCoords = [];
 for(let i=0;i<waypoints.length-1;i++){
-  const a = waypoints[i];
-  const b = waypoints[i+1];
-  const from = [a.lon, a.lat]; // turf: [lon,lat]
-  const to   = [b.lon, b.lat];
-
-  // segment uzunluğuna göre nokta sayısı belirle
-  const distKm = turf.distance(turf.point(from), turf.point(to)); // km
+  const a=waypoints[i], b=waypoints[i+1];
+  const from=[a.lon,a.lat], to=[b.lon,b.lat];
+  const distKm = turf.distance(turf.point(from), turf.point(to));
   let npoints = Math.min(Math.max(Math.round(distKm * 2), 50), 350);
-
-  // great-circle üret
-  const gc = turf.greatCircle(from, to, {npoints: npoints});
+  const gc = turf.greatCircle(from, to, {npoints:npoints});
   gc.geometry.coordinates.forEach((ll, idx)=>{
-    const latlng = [ll[1], ll[0]];
-    // tekrar eden uç noktayı ekleme
-    if(fullCoords.length && idx === 0) {
+    const latlng=[ll[1],ll[0]];
+    if(fullCoords.length && idx===0){
       const last = fullCoords[fullCoords.length-1];
       if(Math.abs(last[0]-latlng[0])<1e-6 && Math.abs(last[1]-latlng[1])<1e-6) return;
     }
@@ -77,20 +67,18 @@ for(let i=0;i<waypoints.length-1;i++){
   });
 }
 
-// glow then main line
+// DRAW
 L.polyline(fullCoords,{color:'#6aa6ff',weight:18,opacity:0.16}).addTo(map);
 const route = L.polyline(fullCoords,{color:'#2a6aff',weight:5,opacity:0.95}).addTo(map);
-
-// örnek: uzun okyanus geçişine küçük işaret
-const mid = fullCoords[Math.floor(fullCoords.length*0.35)];
-if(mid) L.circleMarker(mid,{radius:4,fill:true,fillColor:'#fff',color:'#2a6aff',weight:2}).addTo(map).bindTooltip('Atlantik Geçişi',{direction:'right',className:'label'});
-
-// görünümü sığdır
 map.fitBounds(route.getBounds(),{padding:[60,60]});
 
-// ===== Service Worker (PWA) kaydı =====
+// REGISTER SERVICE WORKER (relative path)
 if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('service-worker.js').catch(err=>console.warn('SW kayıt hatası:',err));
+  navigator.serviceWorker.register('./service-worker.js').then(reg=>{
+    console.log('SW registered:', reg.scope);
+  }).catch(err=>{
+    console.warn('SW register error:', err);
+  });
 }
 </script>
 </body>
