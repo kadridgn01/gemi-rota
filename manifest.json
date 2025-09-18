@@ -1,21 +1,13 @@
 {
   "name": "İstanbul → Güney Amerika Rota",
   "short_name": "Rota",
-  "start_url": "./rota.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#2a6aff",
   "icons": [
-    {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png"}
   ],
-  "description": "İstanbul'dan Güney Amerika'ya örnek, gerçekçi görünümlü gemi rotası."
+  "description":"İstanbul'dan Güney Amerika'ya örnek rota haritası"
 }
