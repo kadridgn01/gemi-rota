@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>İstanbul → Güney Amerika Rota</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  html,body,#map{height:100%;margin:0}
+  .dot{background:#fff;border:3px solid #2a6aff;border-radius:50%;width:14px;height:14px}
+  .label{background:rgba(0,0,0,.55);color:#fff;padding:2px 6px;border-radius:6px;font:12px/1.2 system-ui}
+  .legend{position:absolute;left:12px;bottom:12px;background:#111;color:#fff;padding:10px 12px;border-radius:10px;opacity:.9}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="legend">İstanbul → Cebelitarık → Kanarya → Recife → Rio → Buenos Aires</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// Harita
+const map = L.map('map',{zoomControl:false}).setView([5,-25],3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OpenStreetMap'
+}).addTo(map);
+
+// Noktalar (enlem, boylam)
+const pts = [
+  {name:"İstanbul",      c:[41.01, 28.97]},
+  {name:"Cebelitarık",   c:[35.99, -5.61]},
+  {name:"Kanarya",       c:[28.29,-16.62]},
+  {name:"Recife",        c:[-8.05,-34.90]},
+  {name:"Rio de Janeiro",c:[-22.90,-43.20]},
+  {name:"Buenos Aires",  c:[-34.60,-58.38]}
+];
+
+// Waypoint markerları
+pts.forEach(p=>{
+  L.marker(p.c,{
+    icon: L.divIcon({className:'dot',iconSize:[14,14]})
+  }).addTo(map).bindTooltip(p.name,{permanent:true,direction:'top',offset:[0,-10],className:'label'});
+});
+
+// Rota (parlak mavi hat + ışık)
+const latlngs = pts.map(p=>p.c);
+const glow = L.polyline(latlngs,{color:'#6aa6ff',weight:16,opacity:0.25}).addTo(map);
+const line = L.polyline(latlngs,{color:'#2a6aff',weight:5,opacity:0.95}).addTo(map);
+
+// Gemi ikonu (emoji ile kolay çözüm)
+const ship = L.marker([41.01,28.97],{
+  icon: L.divIcon({html:'🚢',className:'',iconSize:[24,24]})
+}).addTo(map);
+
+// Basit animasyon: gemiyi rota üzerinde gezdir
+let t=0; const speed=0.001; // düşürürsen daha yavaş
+function animate(){
+  const i = Math.floor(t*(latlngs.length-1));
+  const frac = (t*(latlngs.length-1))-i;
+  const a = latlngs[i], b = latlngs[i+1]||latlngs[i];
+  const lat = a[0]+(b[0]-a[0])*frac;
+  const lng = a[1]+(b[1]-a[1])*frac;
+  ship.setLatLng([lat,lng]);
+  t += speed; if(t>1) t=0;
+  requestAnimationFrame(animate);
+}
+animate();
+
+map.fitBounds(line.getBounds(),{padding:[40,40]});
+</script>
+</body>
+</html>
