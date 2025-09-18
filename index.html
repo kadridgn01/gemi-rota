@@ -3,11 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Gerçekçi Rota — İstanbul → Güney Amerika</title>
+<title>Rota — İstanbul → Güney Amerika (Afrika duraklı)</title>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2a6aff">
-
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
@@ -20,46 +19,58 @@
 </head>
 <body>
 <div id="map"></div>
-<div class="legend">İstanbul → Çanakkale → Gibraltar → Kanarya → Recife → Rio → Buenos Aires</div>
+<div class="legend">İstanbul → Çanakkale → Gibraltar → Tangier → Casablanca → Las Palmas → Praia → Dakar → Abidjan → Recife → Rio → Buenos Aires</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
 <script>
-// WAYPOINTS
+// ====== WAYPOINTS (Afrika duraklı) ======
+// Lat / Lon formatı: {name, lat, lon}
 const waypoints = [
   {name:"İstanbul", lat:41.01, lon:28.97},
   {name:"Çanakkale (Dardanel)", lat:40.15, lon:26.41},
-  {name:"Cebelitarık", lat:36.14, lon:-5.35},
-  {name:"Kanarya Yaklaşımı", lat:28.10, lon:-15.40},
+  {name:"Gibraltar", lat:36.14, lon:-5.35},
+  {name:"Tangier (Fas)", lat:35.79, lon:-5.81},
+  {name:"Casablanca (Fas)", lat:33.57, lon:-7.59},
+  {name:"Las Palmas (Canary)", lat:28.12, lon:-15.43},
+  {name:"Praia (Cape Verde)", lat:14.92, lon:-23.51},
+  {name:"Dakar (Senegal)", lat:14.69, lon:-17.44},
+  {name:"Abidjan (Fildişi Sahili)", lat:5.36, lon:-4.01},
   {name:"Recife Açıkları", lat:-8.05, lon:-34.90},
   {name:"Rio de Janeiro", lat:-22.90, lon:-43.20},
   {name:"Buenos Aires", lat:-34.60, lon:-58.38}
 ];
 
-// MAP
-const map = L.map('map',{zoomControl:true}).setView([10,-30],3);
+// ====== MAP SETUP ======
+const map = L.map('map',{zoomControl:true}).setView([10,-25],3);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap'
 }).addTo(map);
 
-// MARKERS
+// Add markers + labels
 waypoints.forEach(p=>{
   L.marker([p.lat,p.lon],{icon: L.divIcon({className:'dot',iconSize:[14,14]})})
     .addTo(map).bindTooltip(p.name,{permanent:true,direction:'top',offset:[0,-10],className:'label'});
 });
 
-// BUILD GREAT-CIRCLE ROUTE
+// ====== BUILD ROUTE: segment-by-segment great-circle (turf) ======
 let fullCoords = [];
 for(let i=0;i<waypoints.length-1;i++){
-  const a=waypoints[i], b=waypoints[i+1];
-  const from=[a.lon,a.lat], to=[b.lon,b.lat];
+  const a = waypoints[i];
+  const b = waypoints[i+1];
+  const from = [a.lon, a.lat];
+  const to   = [b.lon, b.lat];
+
+  // mesafeye göre nokta sayısı (daha uzun segment, daha çok nokta)
   const distKm = turf.distance(turf.point(from), turf.point(to));
-  let npoints = Math.min(Math.max(Math.round(distKm * 2), 50), 350);
-  const gc = turf.greatCircle(from, to, {npoints:npoints});
+  let npoints = Math.min(Math.max(Math.round(distKm * 2), 40), 400);
+
+  const gc = turf.greatCircle(from, to, {npoints: npoints});
   gc.geometry.coordinates.forEach((ll, idx)=>{
-    const latlng=[ll[1],ll[0]];
-    if(fullCoords.length && idx===0){
+    const latlng = [ll[1], ll[0]];
+    // uç noktayı iki kez eklememek için kontrol
+    if(fullCoords.length && idx === 0){
       const last = fullCoords[fullCoords.length-1];
       if(Math.abs(last[0]-latlng[0])<1e-6 && Math.abs(last[1]-latlng[1])<1e-6) return;
     }
@@ -67,17 +78,25 @@ for(let i=0;i<waypoints.length-1;i++){
   });
 }
 
-// DRAW
+// draw glow + main route
 L.polyline(fullCoords,{color:'#6aa6ff',weight:18,opacity:0.16}).addTo(map);
 const route = L.polyline(fullCoords,{color:'#2a6aff',weight:5,opacity:0.95}).addTo(map);
+
+// optional: mark the big ocean crossing point visually
+const atlanticIndex = Math.floor(fullCoords.length*0.45);
+if(fullCoords[atlanticIndex]) {
+  L.circleMarker(fullCoords[atlanticIndex],{radius:5,fill:true,fillColor:'#fff',color:'#2a6aff',weight:2})
+    .addTo(map).bindTooltip('Büyük Atlantik Geçişi',{direction:'right',className:'label'});
+}
+
 map.fitBounds(route.getBounds(),{padding:[60,60]});
 
-// REGISTER SERVICE WORKER (relative path)
+// register service worker (relative path)
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./service-worker.js').then(reg=>{
     console.log('SW registered:', reg.scope);
   }).catch(err=>{
-    console.warn('SW register error:', err);
+    console.warn('SW register failed:', err);
   });
 }
 </script>
