@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Rota — İstanbul → Güney Amerika (Afrika kıyı duraklı, kıvrımlı)</title>
+<title>Rota — İstanbul → Güney Amerika (etkileşimli etiketler)</title>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2a6aff">
@@ -11,33 +11,35 @@
 
 <style>
   html,body,#map{height:100%;margin:0;font-family:system-ui,Arial}
-  /* marker dot */
   .dot{background:#fff;border:3px solid #2a6aff;border-radius:50%;width:14px;height:14px;box-shadow:0 1px 4px rgba(0,0,0,0.25)}
-  /* tooltip style for permanent labels (Leaflet tooltip className) */
   .wp-label{
-    background:rgba(0,0,0,.65);
+    background:rgba(0,0,0,.72);
     color:#fff;
-    padding:4px 8px;
+    padding:6px 8px;
     border-radius:6px;
-    font-size:12px;
+    font-size:13px;
     box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    white-space:nowrap;
   }
   .legend{position:absolute;left:12px;bottom:12px;background:#0b1020;color:#fff;padding:10px 12px;border-radius:10px;opacity:.95;z-index:999;max-width:360px;font-size:13px}
-  /* subtle vignette */
   #map::after { content:""; position: absolute; inset:0; pointer-events:none; box-shadow: inset 0 0 160px rgba(0,0,0,0.12);}
+  /* küçük ekranlarda legend satır sayısını azalt */
+  @media (max-width:600px){
+    .legend{font-size:12px;max-width:260px}
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div class="legend">
-  İstanbul → Çanakkale → Tunus → Cezayir (Algiers) → Oran → Gibraltar → Tangier → Casablanca → Las Palmas → Praia → Dakar → Abidjan → Recife → Rio → Buenos Aires
+  İstanbul → Çanakkale → Tunus → Cezayir → Oran → Gibraltar → Tangier → Casablanca → Las Palmas → Praia → Dakar → Abidjan → Recife → Rio → Buenos Aires
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
 
 <script>
-// ===== WAYPOINTS (Tunus + Cezayir + diğer Afrika durakları) =====
+// ===== WAYPOINTS =====
 const waypoints = [
   {name:"İstanbul", lat:41.01, lon:28.97},
   {name:"Çanakkale (Dardanel)", lat:40.15, lon:26.41},
@@ -62,32 +64,16 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'© OpenStreetMap katkıcıları'
 }).addTo(map);
 
-// ===== MARKERS (temiz, tooltip olarak gösterim) =====
-waypoints.forEach(p=>{
-  const marker = L.marker([p.lat,p.lon],{
-    icon: L.divIcon({className:'', html:`<div class="dot"></div>`, iconSize:[14,14], iconAnchor:[7,7]})
-  }).addTo(map);
-  marker.bindTooltip(p.name, {permanent:true, direction:'top', offset:[0,-12], className:'wp-label'});
-});
-
-// ===== BUILD SMOOTH, REALISTIC ROUTE =====
-// We'll build segment-by-segment great-circle paths with higher resolution
+// ===== BUILD SMOOTH ROUTE =====
 let fullCoords = [];
 for(let i=0;i<waypoints.length-1;i++){
-  const a = waypoints[i];
-  const b = waypoints[i+1];
-  const from = [a.lon, a.lat];
-  const to   = [b.lon, b.lat];
-
-  // distance (km) and npoints scaled for smoother long segments
+  const a = waypoints[i], b = waypoints[i+1];
+  const from = [a.lon, a.lat], to = [b.lon, b.lat];
   const distKm = turf.distance(turf.point(from), turf.point(to));
-  // use a larger multiplier for smoother curvature; clamp to avoid huge arrays
   let npoints = Math.min(Math.max(Math.round(distKm * 4), 80), 800);
-
   const gc = turf.greatCircle(from, to, {npoints: npoints});
   gc.geometry.coordinates.forEach((ll, idx)=>{
     const latlng = [ll[1], ll[0]];
-    // avoid duplicating endpoints
     if(fullCoords.length && idx === 0){
       const last = fullCoords[fullCoords.length-1];
       if(Math.abs(last[0]-latlng[0])<1e-6 && Math.abs(last[1]-latlng[1])<1e-6) return;
@@ -95,22 +81,85 @@ for(let i=0;i<waypoints.length-1;i++){
     fullCoords.push(latlng);
   });
 }
-
-// ===== DRAW GLOW + MAIN ROUTE =====
 L.polyline(fullCoords, {color:'#6aa6ff', weight:20, opacity:0.16, interactive:false}).addTo(map);
 const route = L.polyline(fullCoords, {color:'#2a6aff', weight:5, opacity:0.96}).addTo(map);
-
-// optional: emphasize long ocean crossing with a subtle marker
-const oceanIdx = Math.floor(fullCoords.length * 0.48);
-if(fullCoords[oceanIdx]){
-  L.circleMarker(fullCoords[oceanIdx], {radius:5, fill:true, fillColor:'#fff', color:'#2a6aff', weight:2, opacity:0.95})
-    .addTo(map).bindTooltip('Büyük Atlantik Geçişi',{direction:'right', className:'wp-label'});
-}
-
-// fit to route bounds with padding
 map.fitBounds(route.getBounds(), {padding:[80,80]});
 
-// ===== PWA: register service worker (keeps previous behavior) =====
+// ===== MARKERS & INTERACTIVE TOOLTIPS =====
+const markers = [];
+let lastOpen = null;
+
+// zoomThreshold: zoom seviyesinin üzerinde iken tüm etiketler otomatik açık olur.
+// Bu değeri mobilde test edip (ör. 6 veya 7) ayarlayabilirsin.
+const zoomThreshold = 6;
+
+waypoints.forEach(wp=>{
+  const marker = L.marker([wp.lat, wp.lon], {
+    icon: L.divIcon({className:'', html:`<div class="dot"></div>`, iconSize:[14,14], iconAnchor:[7,7]})
+  }).addTo(map);
+
+  // tooltip oluştur (permanent:false -> başlangıçta kapalı)
+  marker.bindTooltip(wp.name, {permanent:false, direction:'top', offset:[0,-12], className:'wp-label'});
+
+  // hover (desktop): aç / kapat
+  marker.on('mouseover', ()=> {
+    // only show if not already open by zoom auto-open
+    marker.openTooltip();
+    lastOpen = marker;
+  });
+  marker.on('mouseout', ()=> {
+    // if zoom level requires auto-open, keep open; otherwise close
+    if(map.getZoom() < zoomThreshold) marker.closeTooltip();
+  });
+
+  // click/touch: mobil için tooltip toggle
+  marker.on('click', (e)=>{
+    // if tooltip already open, close it; else open and close previous
+    if(lastOpen && lastOpen !== marker){
+      try{ lastOpen.closeTooltip(); }catch(e){}
+      lastOpen = null;
+    }
+    const isOpen = marker.getTooltip() && map.hasLayer(marker.getTooltip());
+    if(isOpen){
+      marker.closeTooltip();
+      lastOpen = null;
+    } else {
+      marker.openTooltip();
+      lastOpen = marker;
+    }
+    // prevent map click propagation (nice UX)
+    e.originalEvent && e.originalEvent.stopPropagation && e.originalEvent.stopPropagation();
+  });
+
+  markers.push(marker);
+});
+
+// map click: kapat açık tooltip'i (kullanıcı boş alana dokununca kapanır)
+map.on('click', ()=> {
+  if(lastOpen){
+    try{ lastOpen.closeTooltip(); }catch(e){}
+    lastOpen = null;
+  }
+});
+
+// zoomend: zoom eşik kontrollü otomatik açma/kapama
+function syncTooltipsWithZoom(){
+  const z = map.getZoom();
+  if(z >= zoomThreshold){
+    // open all labels
+    markers.forEach(m => m.openTooltip());
+  } else {
+    // close all (leaving ones opened by click closed as well)
+    markers.forEach(m => m.closeTooltip());
+    lastOpen = null;
+  }
+}
+map.on('zoomend', syncTooltipsWithZoom);
+
+// initial sync (sayfa yükünde zoom yakınsa açsın)
+syncTooltipsWithZoom();
+
+// ===== PWA: register service worker (relative path) =====
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./service-worker.js').then(reg=>{
     console.log('ServiceWorker registered:', reg.scope);
