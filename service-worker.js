@@ -1,32 +1,47 @@
 const CACHE_NAME = 'rota-cache-v1';
 const FILES_TO_CACHE = [
-  '/rota.html',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/@turf/turf/turf.min.js'
+  'index.html',
+  'manifest.json',
+  'icons/icon-192.png',
+  'icons/icon-512.png'
+  // NOT: CDN dosyalarını buraya koymadık (CORS/cache sorunları olmasın diye)
 ];
 
-self.addEventListener('install', evt => {
+self.addEventListener('install', evt=>{
   evt.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(FILES_TO_CACHE))
   );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', evt => {
+self.addEventListener('activate', evt=>{
   evt.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => {
-      if (k !== CACHE_NAME) return caches.delete(k);
-    })))
+    caches.keys().then(keys => Promise.all(
+      keys.map(k => (k !== CACHE_NAME) ? caches.delete(k) : Promise.resolve())
+    ))
   );
   self.clients.claim();
 });
 
-self.addEventListener('fetch', evt => {
+// Basit strateji: önce ağ (taze), ağ yoksa cache
+self.addEventListener('fetch', evt=>{
+  const req = evt.request;
+  // CDN/third-party ise network-only
+  const url = new URL(req.url);
+  if(url.origin !== location.origin){
+    evt.respondWith(fetch(req).catch(()=>caches.match(req)));
+    return;
+  }
+
+  // same-origin: network-first
   evt.respondWith(
-    caches.match(evt.request).then(resp => resp || fetch(evt.request))
+    fetch(req).then(res=>{
+      // update cache (isteğe bağlı)
+      const resClone = res.clone();
+      caches.open(CACHE_NAME).then(cache => cache.put(req, resClone)).catch(()=>{});
+      return res;
+    }).catch(()=>{
+      return caches.match(req).then(cached => cached || caches.match('index.html'));
+    })
   );
 });
