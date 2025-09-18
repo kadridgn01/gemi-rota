@@ -59,9 +59,11 @@ const waypoints = [
 ];
 
 // ===== MAP SETUP =====
+const map = L.map('map',{zoomControl:true}).setView([18,-10],3);
+
 // Uydu Görüntüsü
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
 }).addTo(map);
   
 // ===== BUILD SMOOTH ROUTE =====
